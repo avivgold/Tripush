@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tripush - Plan Your Trip</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #fff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            color: #2c3e50;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+            padding: 40px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            font-size: 3em;
+            color: #e74c3c;
+            margin: 0;
+        }
+        h2 {
+            font-size: 1.5em;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #7f8c8d;
+            font-size: 1.1em;
+            margin: 5px 0;
+        }
+        .form-section {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 40px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        .autocomplete-suggestions {
+            position: absolute;
+            border: 1px solid #ddd;
+            border-top: none;
+            background: #fff;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 999;
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 0 0 5px 5px;
+        }
+        .autocomplete-suggestion {
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .autocomplete-suggestion:hover {
+            background: #f0f0f0;
+        }
+        .budget-options {
+            display: flex;
+            gap: 10px;
+        }
+        .budget-option {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            text-align: center;
+            cursor: pointer;
+            background: #fff;
+            transition: background-color 0.3s;
+        }
+        .budget-option:hover, .budget-option.selected {
+            background: #f0f0f0;
+        }
+        .interests {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .interest-option {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .interest-option input {
+            margin-right: 5px;
+        }
+        button {
+            background-color: #000;
+            color: #fff;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #333;
+        }
+        .itinerary-section {
+            margin-top: 40px;
+        }
+        .card {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            color: #2c3e50;
+            font-size: 1.3em;
+            margin-bottom: 10px;
+        }
+        .day-section {
+            margin-bottom: 10px;
+        }
+        .day-section strong {
+            color: #34495e;
+        }
+        #map {
+            height: 300px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .total-cost {
+            font-size: 1.5em;
+            color: #e74c3c;
+            text-align: right;
+            margin-top: 20px;
+        }
+    </style>
+    <script>
+        // Simulated city list (static workaround)
+        const cities = [
+            "Amsterdam", "Athens", "Bangkok", "Barcelona", "Beijing", "Berlin", "Boston", "Budapest",
+            "Cairo", "Cape Town", "Chicago", "Copenhagen", "Dubai", "Dublin", "Edinburgh", "Florence",
+            "Hanoi", "Helsinki", "Hong Kong", "Istanbul", "Jakarta", "Jerusalem", "Kyoto", "Lisbon",
+            "London", "Los Angeles", "Madrid", "Melbourne", "Mexico City", "Miami", "Milan", "Montreal",
+            "Moscow", "Mumbai", "Munich", "New Delhi", "New York", "Osaka", "Paris", "Prague",
+            "Rio de Janeiro", "Rome", "San Francisco", "Seoul", "Shanghai", "Singapore", "Stockholm",
+            "Sydney", "Tokyo", "Toronto", "Vancouver", "Venice", "Vienna", "Warsaw", "Zurich"
+        ];
+
+        // Autocomplete function
+        document.addEventListener('DOMContentLoaded', function() {
+            const cityInput = document.getElementById('city');
+            const suggestions = document.createElement('div');
+            suggestions.className = 'autocomplete-suggestions';
+            cityInput.parentNode.appendChild(suggestions);
+
+            cityInput.addEventListener('input', function() {
+                const value = this.value.toLowerCase();
+                suggestions.innerHTML = '';
+
+                if (value.length >= 2) {
+                    const filteredCities = cities.filter(city => city.toLowerCase().startsWith(value));
+                    if (filteredCities.length > 0) {
+                        filteredCities.forEach(city => {
+                            const div = document.createElement('div');
+                            div.className = 'autocomplete-suggestion';
+                            div.textContent = city;
+                            div.addEventListener('click', function() {
+                                cityInput.value = city;
+                                suggestions.style.display = 'none';
+                            });
+                            suggestions.appendChild(div);
+                        });
+                        suggestions.style.display = 'block';
+                    } else {
+                        suggestions.style.display = 'none';
+                    }
+                } else {
+                    suggestions.style.display = 'none';
+                }
+            });
+
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!cityInput.contains(e.target) && !suggestions.contains(e.target)) {
+                    suggestions.style.display = 'none';
+                }
+            });
+
+            // Budget options clickable
+            const budgetOptions = document.querySelectorAll('.budget-option');
+            const budgetInput = document.getElementById('budget');
+
+            budgetOptions.forEach(option => {
+                option.addEventListener('click', function() {
+                    budgetOptions.forEach(opt => opt.classList.remove('selected'));
+                    this.classList.add('selected');
+                    const budgetText = this.textContent;
+                    if (budgetText.includes('Low')) {
+                        budgetInput.value = 500;
+                    } else if (budgetText.includes('Medium')) {
+                        budgetInput.value = 1500;
+                    } else if (budgetText.includes('High')) {
+                        budgetInput.value = 3000;
+                    }
+                });
+            });
+
+            // Ensure form submission works
+            const form = document.querySelector('form');
+            const button = document.querySelector('button');
+            button.addEventListener('click', function(event) {
+                event.preventDefault(); // Prevent default to handle submission manually if needed
+                form.submit(); // Trigger form submission
+            });
+        });
+
+        // Leaflet map initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            var mapContainer = document.getElementById('map');
+            if (mapContainer && {{ markers | length }} > 0) {
+                try {
+                    var map = L.map('map').setView([39.9042, 116.4074], 11); // Center on Beijing
+
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    }).addTo(map);
+
+                    var markersData = {{ markers | tojson | safe }};
+                    if (Array.isArray(markersData)) {
+                        markersData.forEach(function(marker) {
+                            if (marker.lat && marker.lng) {
+                                L.marker([marker.lat, marker.lng]).addTo(map)
+                                    .bindPopup('<b>' + marker.day + '</b><br>' +
+                                               '<b>' + marker.time_slot + '</b><br>' +
+                                               marker.time + ': ' + marker.location + ' ($' + marker.cost + ')');
+                            } else {
+                                console.warn('Invalid marker data:', marker);
+                            }
+                        });
+                    } else {
+                        console.error('Markers data is not an array:', markersData);
+                    }
+                } catch (error) {
+                    console.error('Error initializing map:', error);
+                }
+            } else {
+                console.log("Map container or markers not available. Markers length:", {{ markers | length }});
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Tripush</h1>
+            <p>Your personal AI trip planner, creating custom itineraries tailored to your interests and budget.</p>
+        </header>
+        <form method="POST" action="/">
+            <div class="form-group">
+                <label for="city">What is your destination of choice?</label>
+                <input type="text" id="city" name="city" value="{{ city }}" placeholder="e.g., Beijing">
+            </div>
+            <div class="form-group">
+                <label>How many days are you planning to travel?</label>
+                <input type="number" id="days" name="days" value="{{ days }}" min="1" max="14">
+            </div>
+            <div class="form-group">
+                <label>What is your budget?</label>
+                <div class="budget-options">
+                    <div class="budget-option">Low<br>0-1000 USD</div>
+                    <div class="budget-option">Medium<br>1000-2500 USD</div>
+                    <div class="budget-option">High<br>2500+ USD</div>
+                </div>
+                <input type="number" id="budget" name="budget" value="{{ budget }}" step="0.01" min="0" placeholder="e.g., 500">
+            </div>
+            <div class="form-group">
+                <label>Which activities are you interested in?</label>
+                <div class="interests">
+                    <label class="interest-option"><input type="checkbox" name="interests" value="food" {% if 'food' in interests %}checked{% endif %}> Food</label>
+                    <label class="interest-option"><input type="checkbox" name="interests" value="history" {% if 'history' in interests %}checked{% endif %}> History</label>
+                    <label class="interest-option"><input type="checkbox" name="interests" value="nature" {% if 'nature' in interests %}checked{% endif %}> Nature</label>
+                    <label class="interest-option"><input type="checkbox" name="interests" value="general" {% if 'general' in interests %}checked{% endif %}> General</label>
+                </div>
+            </div>
+            <button type="submit">Get Started—It's Free</button>
+        </form>
+
+        {% if itinerary %}
+        <div class="itinerary-section">
+            <div id="map"></div>
+            {% set sections = itinerary.split('- ') %}
+            {% set unique_sections = [] %}
+            {% for section in sections if section.strip() %}
+                {% if section not in unique_sections %}
+                    {% set _ = unique_sections.append(section) %}
+                    <div class="card">
+                        {% if section.startswith('Overview:') %}
+                            <h3>Overview</h3>
+                            <p>{{ section.split(':', 1)[1].strip() }}</p>
+                        {% elif section.startswith('Budget Overview:') %}
+                            <h3>Budget Overview</h3>
+                            {% set budget_lines = section.split('\n') %}
+                            {% for line in budget_lines if line.strip() %}
+                                <p>{{ line.strip() }}</p>
+                            {% endfor %}
+                        {% elif section.startswith('Day ') %}
+                            <h3>{{ section }}</h3>
+                            {% set day_lines = section.split('\n') %}
+                            {% set current_time_slot = '' %}
+                            {% for line in day_lines %}
+                                {% if line.strip() %}
+                                    {% if 'Morning:' in line or 'Afternoon:' in line or 'Evening:' in line %}
+                                        {% set current_time_slot = line.strip() %}
+                                        <div class="day-section">
+                                            <p><strong>{{ current_time_slot }}</strong></p>
+                                        </div>
+                                    {% elif line.startswith('- ') and current_time_slot %}
+                                        <p>{{ line.strip() }}</p>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                {% endif %}
+            {% endfor %}
+            <div class="total-cost">Total Cost: ${{ total_cost }}</div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
